@@ -9,6 +9,22 @@ export interface FetchResult {
 
 export async function fetchUrl(url: string, lastKnownUrl: string | null): Promise<FetchResult> {
   try {
+    // Check if URL looks like a direct RSS/XML feed
+    const isLikelyFeed = url.includes('rss.app') ||
+                         url.includes('/feed') ||
+                         url.includes('/rss') ||
+                         url.endsWith('.xml') ||
+                         url.endsWith('.rss') ||
+                         url.includes('feeds.') ||
+                         url.includes('/atom');
+
+    if (isLikelyFeed) {
+      const feedResult = await tryFetchFeed(url, url, lastKnownUrl);
+      if (feedResult) {
+        return feedResult;
+      }
+    }
+
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; CompetitorWatch/1.0; Demo)',
@@ -26,8 +42,39 @@ export async function fetchUrl(url: string, lastKnownUrl: string | null): Promis
       };
     }
 
-    const html = await response.text();
-    const $ = cheerio.load(html);
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+
+    // If response is XML/RSS, parse as feed
+    if (contentType.includes('xml') || contentType.includes('rss') || text.trimStart().startsWith('<?xml')) {
+      const $ = cheerio.load(text, { xmlMode: true });
+
+      // RSS format
+      let item = $('item').first();
+      let link = item.find('link').text() || item.find('link').attr('href');
+      let title = item.find('title').text();
+      let description = item.find('description').text();
+
+      // Atom format
+      if (!link) {
+        item = $('entry').first();
+        link = item.find('link').attr('href') || item.find('link').text();
+        title = item.find('title').text();
+        description = item.find('summary, content').text();
+      }
+
+      if (link) {
+        const contentText = `${title}. ${description}`.slice(0, 500);
+        return {
+          hasNewContent: link !== lastKnownUrl,
+          contentUrl: link,
+          contentText,
+          error: null,
+        };
+      }
+    }
+
+    const $ = cheerio.load(text);
 
     // Remove scripts and styles
     $('script, style, nav, footer, header').remove();
@@ -36,7 +83,7 @@ export async function fetchUrl(url: string, lastKnownUrl: string | null): Promis
     let contentUrl: string | null = null;
     let contentText: string | null = null;
 
-    // Check for RSS/Atom feed first
+    // Check for RSS/Atom feed link in HTML
     const rssLink = $('link[type="application/rss+xml"], link[type="application/atom+xml"]').first().attr('href');
     if (rssLink) {
       const feedResult = await tryFetchFeed(rssLink, url, lastKnownUrl);
