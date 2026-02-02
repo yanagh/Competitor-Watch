@@ -1,31 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db, { CompetitorUrl } from '@/lib/db';
+import { getSession } from '@/lib/auth';
+import { getCompetitorUrls, updateCompetitorUrl } from '@/lib/db';
 import { fetchUrl, summarizeContent } from '@/lib/fetcher';
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json().catch(() => ({}));
     const urlId = body.urlId;
 
-    let urls: CompetitorUrl[];
-
-    if (urlId) {
-      // Refresh single URL
-      urls = db.prepare('SELECT * FROM competitor_urls WHERE id = ?').all(urlId) as CompetitorUrl[];
-    } else {
-      // Refresh all URLs
-      urls = db.prepare('SELECT * FROM competitor_urls').all() as CompetitorUrl[];
-    }
-
-    const updateStmt = db.prepare(`
-      UPDATE competitor_urls
-      SET last_checked = ?,
-          last_update_url = CASE WHEN ? IS NOT NULL THEN ? ELSE last_update_url END,
-          last_update_date = CASE WHEN ? = 1 THEN ? ELSE last_update_date END,
-          last_summary = CASE WHEN ? = 1 THEN ? ELSE last_summary END,
-          status = ?
-      WHERE id = ?
-    `);
+    // Get URLs belonging to user's competitors
+    const urls = await getCompetitorUrls(session.userId, urlId);
 
     const results = [];
 
@@ -48,18 +37,13 @@ export async function POST(request: NextRequest) {
         summary = urlRecord.last_summary;
       }
 
-      const hasNew = result.hasNewContent ? 1 : 0;
-
-      updateStmt.run(
+      await updateCompetitorUrl(
+        urlRecord.id,
         now,
         result.contentUrl,
-        result.contentUrl,
-        hasNew,
-        now,
-        hasNew,
+        result.hasNewContent,
         summary,
-        status,
-        urlRecord.id
+        status
       );
 
       results.push({

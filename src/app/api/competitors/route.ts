@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { getSession } from '@/lib/auth';
+import {
+  getCompetitorsWithUrls,
+  createCompetitor,
+  createCompetitorUrl,
+  deleteCompetitor,
+} from '@/lib/db';
 
 function detectSourceType(url: string): 'facebook' | 'website' | 'linkedin' {
   if (url.includes('facebook.com') || url.includes('fb.com')) return 'facebook';
@@ -9,24 +15,12 @@ function detectSourceType(url: string): 'facebook' | 'website' | 'linkedin' {
 
 export async function GET() {
   try {
-    const competitors = db.prepare(`
-      SELECT
-        c.id as competitor_id,
-        c.name as competitor_name,
-        c.type as competitor_type,
-        u.id as url_id,
-        u.url,
-        u.source_type,
-        u.last_checked,
-        u.last_update_url,
-        u.last_update_date,
-        u.last_summary,
-        u.status
-      FROM competitors c
-      LEFT JOIN competitor_urls u ON c.id = u.competitor_id
-      ORDER BY c.name, u.source_type
-    `).all();
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
+    const competitors = await getCompetitorsWithUrls(session.userId);
     return NextResponse.json(competitors);
   } catch (error) {
     console.error('Failed to fetch competitors:', error);
@@ -36,6 +30,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { name, type, urls } = body;
 
@@ -48,21 +47,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert competitor
-    const insertCompetitor = db.prepare(
-      'INSERT INTO competitors (name, type) VALUES (?, ?)'
-    );
-    const result = insertCompetitor.run(name, type);
-    const competitorId = result.lastInsertRowid;
+    const competitorId = await createCompetitor(session.userId, name, type);
+    if (!competitorId) {
+      return NextResponse.json({ error: 'Failed to create competitor' }, { status: 500 });
+    }
 
     // Insert URLs
-    const insertUrl = db.prepare(
-      'INSERT INTO competitor_urls (competitor_id, url, source_type) VALUES (?, ?, ?)'
-    );
-
     for (const url of urls) {
       if (url && url.trim()) {
         const sourceType = detectSourceType(url.trim());
-        insertUrl.run(competitorId, url.trim(), sourceType);
+        await createCompetitorUrl(competitorId, url.trim(), sourceType);
       }
     }
 
@@ -75,6 +69,11 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -82,9 +81,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Missing competitor ID' }, { status: 400 });
     }
 
-    // Delete URLs first (foreign key)
-    db.prepare('DELETE FROM competitor_urls WHERE competitor_id = ?').run(id);
-    db.prepare('DELETE FROM competitors WHERE id = ?').run(id);
+    const deleted = await deleteCompetitor(parseInt(id, 10), session.userId);
+    if (!deleted) {
+      return NextResponse.json({ error: 'Competitor not found' }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

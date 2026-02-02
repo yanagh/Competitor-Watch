@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface DashboardItem {
   competitor_id: number;
@@ -23,15 +24,42 @@ interface CompetitorGroup {
   items: DashboardItem[];
 }
 
+interface User {
+  id: number;
+  email: string;
+}
+
 export default function Dashboard() {
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   const [data, setData] = useState<DashboardItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
 
+  const checkAuth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (!res.ok) {
+        router.push('/login');
+        return null;
+      }
+      const data = await res.json();
+      setUser(data.user);
+      return data.user;
+    } catch {
+      router.push('/login');
+      return null;
+    }
+  }, [router]);
+
   const fetchData = useCallback(async () => {
     try {
       const res = await fetch('/api/competitors');
+      if (res.status === 401) {
+        router.push('/login');
+        return;
+      }
       const items = await res.json();
       setData(Array.isArray(items) ? items : []);
     } catch {
@@ -39,11 +67,18 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    checkAuth().then(user => {
+      if (user) fetchData();
+    });
+  }, [checkAuth, fetchData]);
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+  };
 
   const handleRefresh = async (urlId?: number) => {
     setRefreshing(true);
@@ -87,6 +122,14 @@ export default function Dashboard() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="text-zinc-500">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50">
       <div className="max-w-5xl mx-auto px-4 py-8">
@@ -96,21 +139,36 @@ export default function Dashboard() {
             <h1 className="text-2xl font-semibold text-zinc-900">Competitor Watch</h1>
             <p className="text-zinc-500 text-sm mt-1">Monitor competitors in one place</p>
           </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => handleRefresh()}
-              disabled={refreshing}
-              className="px-4 py-2 text-sm font-medium text-zinc-700 bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 disabled:opacity-50 transition-colors"
-            >
-              {refreshing ? 'Checking...' : 'Refresh All'}
-            </button>
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="px-4 py-2 text-sm font-medium text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 transition-colors"
-            >
-              Add Competitor
-            </button>
+          <div className="flex items-center gap-4">
+            {user && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-zinc-500">{user.email}</span>
+                <button
+                  onClick={handleLogout}
+                  className="text-sm text-zinc-500 hover:text-zinc-700"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3 mb-6">
+          <button
+            onClick={() => handleRefresh()}
+            disabled={refreshing}
+            className="px-4 py-2 text-sm font-medium text-zinc-700 bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 disabled:opacity-50 transition-colors"
+          >
+            {refreshing ? 'Checking...' : 'Refresh All'}
+          </button>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="px-4 py-2 text-sm font-medium text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 transition-colors"
+          >
+            Add Competitor
+          </button>
         </div>
 
         {/* Add Form Modal */}
@@ -125,9 +183,7 @@ export default function Dashboard() {
         )}
 
         {/* Content */}
-        {loading ? (
-          <div className="text-center py-12 text-zinc-500">Loading...</div>
-        ) : grouped.length === 0 ? (
+        {grouped.length === 0 ? (
           <EmptyState onAdd={() => setShowAddForm(true)} />
         ) : (
           <div className="space-y-6">
