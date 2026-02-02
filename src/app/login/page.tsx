@@ -30,7 +30,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push('/');
+      router.push('/dashboard');
       router.refresh();
     } catch {
       setError('Something went wrong');
@@ -40,10 +40,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-zinc-50 flex flex-col items-center justify-center p-4">
+      <Link href="/" className="mb-8 flex items-center gap-2">
+        <span className="text-xl font-semibold text-zinc-900">Customer Watch</span>
+        <span className="px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">Demo</span>
+      </Link>
       <div className="bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-sm">
         <h1 className="text-xl font-semibold text-zinc-900 mb-1">Sign in</h1>
-        <p className="text-sm text-zinc-500 mb-6">Access your competitor dashboard</p>
+        <p className="text-sm text-zinc-500 mb-6">Access your dashboard</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
