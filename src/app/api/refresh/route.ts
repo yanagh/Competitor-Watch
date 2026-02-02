@@ -43,7 +43,8 @@ export async function POST(request: NextRequest) {
         result.contentUrl,
         result.hasNewContent,
         summary,
-        status
+        status,
+        result.contentDate
       );
 
       results.push({

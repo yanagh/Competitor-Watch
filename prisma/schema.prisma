@@ -33,6 +33,7 @@ model CompetitorUrl {
   id             Int            @id @default(autoincrement())
   competitorId   Int            @map("competitor_id")
   url            String
+  name           String?        @map("name")
   sourceType     SourceType     @map("source_type")
   lastChecked    DateTime?      @map("last_checked")
   lastUpdateUrl  String?        @map("last_update_url")

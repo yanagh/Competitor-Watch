@@ -21,6 +21,7 @@ export interface DashboardItem {
   competitor_type: string;
   url_id: number;
   url: string;
+  url_name: string | null;
   source_type: string;
   last_checked: string | null;
   last_update_url: string | null;
@@ -71,6 +72,7 @@ export async function getCompetitorsWithUrls(userId: number): Promise<DashboardI
         competitor_type: competitor.type,
         url_id: 0,
         url: '',
+        url_name: null,
         source_type: '',
         last_checked: null,
         last_update_url: null,
@@ -86,6 +88,7 @@ export async function getCompetitorsWithUrls(userId: number): Promise<DashboardI
           competitor_type: competitor.type,
           url_id: url.id,
           url: url.url,
+          url_name: url.name,
           source_type: url.sourceType,
           last_checked: url.lastChecked?.toISOString() || null,
           last_update_url: url.lastUpdateUrl,
@@ -122,10 +125,11 @@ export async function deleteCompetitor(competitorId: number, userId: number) {
 export async function createCompetitorUrl(
   competitorId: number,
   url: string,
-  sourceType: 'facebook' | 'website' | 'linkedin'
+  sourceType: 'facebook' | 'website' | 'linkedin',
+  name?: string | null
 ) {
   const competitorUrl = await prisma.competitorUrl.create({
-    data: { competitorId, url, sourceType },
+    data: { competitorId, url, sourceType, name: name || null },
   });
   return competitorUrl.id;
 }
@@ -152,7 +156,8 @@ export async function updateCompetitorUrl(
   contentUrl: string | null,
   hasNew: boolean,
   summary: string | null,
-  status: 'pending' | 'new_update' | 'no_updates' | 'error'
+  status: 'pending' | 'new_update' | 'no_updates' | 'error',
+  contentDate?: string | null
 ) {
   const data: {
     lastChecked: Date;
@@ -170,7 +175,8 @@ export async function updateCompetitorUrl(
   }
 
   if (hasNew) {
-    data.lastUpdateDate = new Date(lastChecked);
+    // Use the content's original publication date if available, otherwise use check time
+    data.lastUpdateDate = contentDate ? new Date(contentDate) : new Date(lastChecked);
     data.lastSummary = summary;
   }
 
@@ -178,4 +184,47 @@ export async function updateCompetitorUrl(
     where: { id: urlId },
     data,
   });
+}
+
+// Update competitor details
+export async function updateCompetitor(
+  competitorId: number,
+  userId: number,
+  name: string,
+  type: 'competitor' | 'partner' | 'inspiration'
+) {
+  const result = await prisma.competitor.updateMany({
+    where: { id: competitorId, userId },
+    data: { name, type },
+  });
+  return result.count > 0;
+}
+
+// Delete a URL
+export async function deleteCompetitorUrl(urlId: number, userId: number) {
+  const result = await prisma.competitorUrl.deleteMany({
+    where: {
+      id: urlId,
+      competitor: { userId },
+    },
+  });
+  return result.count > 0;
+}
+
+// Update a URL
+export async function updateUrlDetails(
+  urlId: number,
+  userId: number,
+  url: string,
+  name: string | null,
+  sourceType: 'facebook' | 'website' | 'linkedin'
+) {
+  const result = await prisma.competitorUrl.updateMany({
+    where: {
+      id: urlId,
+      competitor: { userId },
+    },
+    data: { url, name, sourceType },
+  });
+  return result.count > 0;
 }

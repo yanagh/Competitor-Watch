@@ -9,6 +9,7 @@ interface DashboardItem {
   competitor_type: string;
   url_id: number;
   url: string;
+  url_name: string | null;
   source_type: string;
   last_checked: string | null;
   last_update_url: string | null;
@@ -36,6 +37,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingCompetitor, setEditingCompetitor] = useState<CompetitorGroup | null>(null);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -182,6 +184,18 @@ export default function Dashboard() {
           />
         )}
 
+        {/* Edit Form Modal */}
+        {editingCompetitor && (
+          <EditCompetitorForm
+            competitor={editingCompetitor}
+            onClose={() => setEditingCompetitor(null)}
+            onSuccess={() => {
+              setEditingCompetitor(null);
+              fetchData();
+            }}
+          />
+        )}
+
         {/* Content */}
         {grouped.length === 0 ? (
           <EmptyState onAdd={() => setShowAddForm(true)} />
@@ -193,6 +207,7 @@ export default function Dashboard() {
                 competitor={competitor}
                 onRefresh={handleRefresh}
                 onDelete={handleDelete}
+                onEdit={setEditingCompetitor}
                 refreshing={refreshing}
               />
             ))}
@@ -228,11 +243,13 @@ function CompetitorCard({
   competitor,
   onRefresh,
   onDelete,
+  onEdit,
   refreshing,
 }: {
   competitor: CompetitorGroup;
   onRefresh: (urlId: number) => void;
   onDelete: (id: number) => void;
+  onEdit: (competitor: CompetitorGroup) => void;
   refreshing: boolean;
 }) {
   const typeColors = {
@@ -251,15 +268,26 @@ function CompetitorCard({
             {competitor.type}
           </span>
         </div>
-        <button
-          onClick={() => onDelete(competitor.id)}
-          className="text-zinc-400 hover:text-red-500 transition-colors"
-          title="Delete competitor"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onEdit(competitor)}
+            className="text-zinc-400 hover:text-zinc-700 transition-colors"
+            title="Edit competitor"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onDelete(competitor.id)}
+            className="text-zinc-400 hover:text-red-500 transition-colors"
+            title="Delete competitor"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* URLs */}
@@ -315,16 +343,32 @@ function UrlRow({
     });
   };
 
+  const formatUpdateDate = (date: string | null) => {
+    if (!date) return null;
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
   return (
     <div className="px-5 py-4">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span>{sourceIcons[item.source_type as keyof typeof sourceIcons]}</span>
-            <span className="text-sm font-medium text-zinc-700 capitalize">{item.source_type}</span>
+            <span className="text-sm font-medium text-zinc-700">
+              {item.url_name || item.source_type.charAt(0).toUpperCase() + item.source_type.slice(1)}
+            </span>
             <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${statusColors[item.status as keyof typeof statusColors]}`}>
               {statusLabels[item.status as keyof typeof statusLabels]}
             </span>
+            {item.last_update_date && item.status === 'new_update' && (
+              <span className="text-xs text-zinc-400">
+                ({formatUpdateDate(item.last_update_date)})
+              </span>
+            )}
           </div>
           <a
             href={item.url}
@@ -365,6 +409,11 @@ function UrlRow({
   );
 }
 
+interface UrlField {
+  url: string;
+  name: string;
+}
+
 function AddCompetitorForm({
   onClose,
   onSuccess,
@@ -374,13 +423,13 @@ function AddCompetitorForm({
 }) {
   const [name, setName] = useState('');
   const [type, setType] = useState<'competitor' | 'partner' | 'inspiration'>('competitor');
-  const [urls, setUrls] = useState(['']);
+  const [urls, setUrls] = useState<UrlField[]>([{ url: '', name: '' }]);
   const [saving, setSaving] = useState(false);
 
-  const addUrlField = () => setUrls([...urls, '']);
-  const updateUrl = (index: number, value: string) => {
+  const addUrlField = () => setUrls([...urls, { url: '', name: '' }]);
+  const updateUrl = (index: number, field: 'url' | 'name', value: string) => {
     const newUrls = [...urls];
-    newUrls[index] = value;
+    newUrls[index] = { ...newUrls[index], [field]: value };
     setUrls(newUrls);
   };
   const removeUrl = (index: number) => {
@@ -393,7 +442,7 @@ function AddCompetitorForm({
     e.preventDefault();
     if (!name.trim()) return;
 
-    const validUrls = urls.filter(u => u.trim());
+    const validUrls = urls.filter(u => u.url.trim());
     if (validUrls.length === 0) return;
 
     setSaving(true);
@@ -453,32 +502,41 @@ function AddCompetitorForm({
 
           <div>
             <label className="block text-sm font-medium text-zinc-700 mb-1">URLs</label>
-            <p className="text-xs text-zinc-500 mb-2">Add Facebook page, website/blog, or LinkedIn page URLs</p>
-            <div className="space-y-2">
-              {urls.map((url, index) => (
-                <div key={index} className="flex gap-2">
+            <p className="text-xs text-zinc-500 mb-2">Add Facebook page, website/blog, or LinkedIn page URLs. Give each a name to identify it.</p>
+            <div className="space-y-3">
+              {urls.map((urlItem, index) => (
+                <div key={index} className="p-3 bg-zinc-50 rounded-lg space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={urlItem.name}
+                      onChange={e => updateUrl(index, 'name', e.target.value)}
+                      placeholder="Name (e.g. Facebook, Blog RSS)"
+                      className="flex-1 px-3 py-2 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent text-sm"
+                    />
+                    {urls.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeUrl(index)}
+                        className="px-2 text-zinc-400 hover:text-red-500"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="url"
-                    value={url}
-                    onChange={e => updateUrl(index, e.target.value)}
+                    value={urlItem.url}
+                    onChange={e => updateUrl(index, 'url', e.target.value)}
                     placeholder="https://..."
-                    className="flex-1 px-3 py-2 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent text-sm"
                   />
-                  {urls.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeUrl(index)}
-                      className="px-2 text-zinc-400 hover:text-red-500"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  )}
                 </div>
               ))}
             </div>
-            {urls.length < 3 && (
+            {urls.length < 5 && (
               <button
                 type="button"
                 onClick={addUrlField}
@@ -503,6 +561,242 @@ function AddCompetitorForm({
               className="flex-1 px-4 py-2 text-sm font-medium text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 disabled:opacity-50 transition-colors"
             >
               {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface EditUrlField {
+  id?: number;
+  url: string;
+  name: string;
+  action?: 'update' | 'add' | 'delete';
+  isNew?: boolean;
+}
+
+function EditCompetitorForm({
+  competitor,
+  onClose,
+  onSuccess,
+}: {
+  competitor: CompetitorGroup;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [name, setName] = useState(competitor.name);
+  const [type, setType] = useState<'competitor' | 'partner' | 'inspiration'>(
+    competitor.type as 'competitor' | 'partner' | 'inspiration'
+  );
+  const [urls, setUrls] = useState<EditUrlField[]>(
+    competitor.items.length > 0
+      ? competitor.items.map(item => ({
+          id: item.url_id,
+          url: item.url,
+          name: item.url_name || '',
+          action: 'update' as const,
+        }))
+      : [{ url: '', name: '', isNew: true, action: 'add' as const }]
+  );
+  const [saving, setSaving] = useState(false);
+
+  const addUrlField = () => setUrls([...urls, { url: '', name: '', isNew: true, action: 'add' }]);
+
+  const updateUrl = (index: number, field: 'url' | 'name', value: string) => {
+    const newUrls = [...urls];
+    newUrls[index] = { ...newUrls[index], [field]: value };
+    if (!newUrls[index].isNew) {
+      newUrls[index].action = 'update';
+    }
+    setUrls(newUrls);
+  };
+
+  const removeUrl = (index: number) => {
+    const urlItem = urls[index];
+    if (urlItem.isNew) {
+      // Just remove new unsaved URLs
+      setUrls(urls.filter((_, i) => i !== index));
+    } else {
+      // Mark existing URLs for deletion
+      const newUrls = [...urls];
+      newUrls[index] = { ...newUrls[index], action: 'delete' };
+      setUrls(newUrls);
+    }
+  };
+
+  const restoreUrl = (index: number) => {
+    const newUrls = [...urls];
+    newUrls[index] = { ...newUrls[index], action: 'update' };
+    setUrls(newUrls);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    setSaving(true);
+    try {
+      // Prepare URL updates
+      const urlUpdates = urls
+        .filter(u => u.action === 'delete' || (u.url.trim() && (u.action === 'add' || u.action === 'update')))
+        .map(u => ({
+          id: u.id,
+          url: u.url,
+          name: u.name || null,
+          action: u.action,
+        }));
+
+      const res = await fetch('/api/competitors', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: competitor.id,
+          name,
+          type,
+          urls: urlUpdates,
+        }),
+      });
+
+      if (res.ok) {
+        onSuccess();
+      }
+    } catch {
+      console.error('Failed to update');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const activeUrls = urls.filter(u => u.action !== 'delete');
+  const deletedUrls = urls.filter(u => u.action === 'delete');
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between">
+          <h2 className="font-medium text-zinc-900">Edit Competitor</h2>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="e.g. Acme Corp"
+              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">Type</label>
+            <select
+              value={type}
+              onChange={e => setType(e.target.value as typeof type)}
+              className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent"
+            >
+              <option value="competitor">Competitor</option>
+              <option value="partner">Partner</option>
+              <option value="inspiration">Inspiration</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">URLs</label>
+            <p className="text-xs text-zinc-500 mb-2">Edit, add, or remove URLs. Give each a name to identify it.</p>
+            <div className="space-y-3">
+              {urls.map((urlItem, index) => (
+                urlItem.action !== 'delete' && (
+                  <div key={urlItem.id || `new-${index}`} className="p-3 bg-zinc-50 rounded-lg space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={urlItem.name}
+                        onChange={e => updateUrl(index, 'name', e.target.value)}
+                        placeholder="Name (e.g. Facebook, Blog RSS)"
+                        className="flex-1 px-3 py-2 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeUrl(index)}
+                        className="px-2 text-zinc-400 hover:text-red-500"
+                        title="Remove URL"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                    <input
+                      type="url"
+                      value={urlItem.url}
+                      onChange={e => updateUrl(index, 'url', e.target.value)}
+                      placeholder="https://..."
+                      className="w-full px-3 py-2 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-900 focus:border-transparent text-sm"
+                    />
+                  </div>
+                )
+              ))}
+            </div>
+
+            {/* Show deleted URLs with restore option */}
+            {deletedUrls.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-zinc-500">Will be deleted:</p>
+                {deletedUrls.map((urlItem, i) => {
+                  const originalIndex = urls.findIndex(u => u.id === urlItem.id);
+                  return (
+                    <div key={urlItem.id} className="p-2 bg-red-50 rounded-lg flex items-center justify-between">
+                      <span className="text-sm text-red-700 line-through truncate">
+                        {urlItem.name || urlItem.url}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => restoreUrl(originalIndex)}
+                        className="text-xs text-red-600 hover:text-red-800"
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {activeUrls.length < 5 && (
+              <button
+                type="button"
+                onClick={addUrlField}
+                className="mt-2 text-sm text-zinc-500 hover:text-zinc-700"
+              >
+                + Add another URL
+              </button>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 text-sm font-medium text-zinc-700 bg-zinc-100 rounded-lg hover:bg-zinc-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2 text-sm font-medium text-white bg-zinc-900 rounded-lg hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>

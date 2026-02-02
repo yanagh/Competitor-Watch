@@ -4,6 +4,7 @@ export interface FetchResult {
   hasNewContent: boolean;
   contentUrl: string | null;
   contentText: string | null;
+  contentDate: string | null;  // Original publication date from RSS/source
   error: string | null;
 }
 
@@ -38,6 +39,7 @@ export async function fetchUrl(url: string, lastKnownUrl: string | null): Promis
         hasNewContent: false,
         contentUrl: null,
         contentText: null,
+        contentDate: null,
         error: `HTTP ${response.status}`,
       };
     }
@@ -54,6 +56,7 @@ export async function fetchUrl(url: string, lastKnownUrl: string | null): Promis
       let link = item.find('link').text() || item.find('link').attr('href');
       let title = item.find('title').text();
       let description = item.find('description').text();
+      let pubDate = item.find('pubDate').text() || item.find('dc\\:date').text();
 
       // Atom format
       if (!link) {
@@ -61,14 +64,28 @@ export async function fetchUrl(url: string, lastKnownUrl: string | null): Promis
         link = item.find('link').attr('href') || item.find('link').text();
         title = item.find('title').text();
         description = item.find('summary, content').text();
+        pubDate = item.find('published').text() || item.find('updated').text();
       }
 
       if (link) {
         const contentText = `${title}. ${description}`.slice(0, 500);
+        // Parse publication date
+        let contentDate: string | null = null;
+        if (pubDate) {
+          try {
+            const parsedDate = new Date(pubDate);
+            if (!isNaN(parsedDate.getTime())) {
+              contentDate = parsedDate.toISOString();
+            }
+          } catch {
+            // Could not parse date
+          }
+        }
         return {
           hasNewContent: link !== lastKnownUrl,
           contentUrl: link,
           contentText,
+          contentDate,
           error: null,
         };
       }
@@ -108,6 +125,7 @@ export async function fetchUrl(url: string, lastKnownUrl: string | null): Promis
         hasNewContent: false,
         contentUrl,
         contentText: contentText?.slice(0, 500) || null,
+        contentDate: null,
         error: 'Facebook requires login to view posts. Only page description available.',
       };
     }
@@ -125,6 +143,7 @@ export async function fetchUrl(url: string, lastKnownUrl: string | null): Promis
         hasNewContent: false,
         contentUrl,
         contentText: contentText?.slice(0, 500) || null,
+        contentDate: null,
         error: 'LinkedIn requires login to view posts. Only page description available.',
       };
     }
@@ -210,6 +229,7 @@ export async function fetchUrl(url: string, lastKnownUrl: string | null): Promis
       hasNewContent,
       contentUrl: contentUrl || url,
       contentText,
+      contentDate: null,  // No date available from HTML scraping
       error: !contentUrl ? 'Could not find blog posts on this page.' : null,
     };
 
@@ -218,6 +238,7 @@ export async function fetchUrl(url: string, lastKnownUrl: string | null): Promis
       hasNewContent: false,
       contentUrl: null,
       contentText: null,
+      contentDate: null,
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
@@ -245,6 +266,7 @@ async function tryFetchFeed(feedUrl: string, baseUrl: string, lastKnownUrl: stri
     let link = item.find('link').text() || item.find('link').attr('href');
     let title = item.find('title').text();
     let description = item.find('description').text();
+    let pubDate = item.find('pubDate').text() || item.find('dc\\:date').text();
 
     // Atom format
     if (!link) {
@@ -252,14 +274,28 @@ async function tryFetchFeed(feedUrl: string, baseUrl: string, lastKnownUrl: stri
       link = item.find('link').attr('href') || item.find('link').text();
       title = item.find('title').text();
       description = item.find('summary, content').text();
+      pubDate = item.find('published').text() || item.find('updated').text();
     }
 
     if (link) {
       const contentText = `${title}. ${description}`.slice(0, 500);
+      // Parse the publication date
+      let contentDate: string | null = null;
+      if (pubDate) {
+        try {
+          const parsedDate = new Date(pubDate);
+          if (!isNaN(parsedDate.getTime())) {
+            contentDate = parsedDate.toISOString();
+          }
+        } catch {
+          // Could not parse date
+        }
+      }
       return {
         hasNewContent: link !== lastKnownUrl,
         contentUrl: link,
         contentText,
+        contentDate,
         error: null,
       };
     }
