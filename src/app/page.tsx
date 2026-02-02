@@ -136,10 +136,12 @@ export default function Dashboard() {
     <div className="min-h-screen bg-zinc-50">
       <div className="max-w-5xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold text-zinc-900">Competitor Watch</h1>
-            <p className="text-zinc-500 text-sm mt-1">Monitor competitors in one place</p>
+            <span className="px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">
+              Demo
+            </span>
           </div>
           <div className="flex items-center gap-4">
             {user && (
@@ -154,6 +156,18 @@ export default function Dashboard() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Instructions */}
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-100 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>How it works:</strong> Add links to blogs or news pages to monitor for updates.
+            For Facebook or LinkedIn pages, convert them to RSS feeds using{' '}
+            <a href="https://rss.app" target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-600">
+              rss.app
+            </a>{' '}
+            or similar services, then add the feed URL here. Give each link a name so you can identify it easily.
+          </p>
         </div>
 
         {/* Actions */}
