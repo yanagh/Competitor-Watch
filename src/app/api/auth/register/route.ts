@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createUser, getUserByEmail, initializeTables } from '@/lib/db';
+import { createUser, getUserByEmail } from '@/lib/db';
 import { hashPassword, createSession, getSessionCookieOptions } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
-    // Ensure tables exist
-    await initializeTables();
-
     const body = await request.json();
     const { email, password } = body;
 

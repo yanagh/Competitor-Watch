@@ -1,25 +1,20 @@
-import { sql } from '@vercel/postgres';
+import { PrismaClient } from '@/generated/prisma/client';
 
-export interface Competitor {
-  id: number;
-  user_id: number;
-  name: string;
-  type: 'competitor' | 'partner' | 'inspiration';
-  created_at: string;
+// Prevent multiple instances in development
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient({
+  // Prisma Postgres uses Accelerate
+  accelerateUrl: process.env.DATABASE_URL!,
+});
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
 }
 
-export interface CompetitorUrl {
-  id: number;
-  competitor_id: number;
-  url: string;
-  source_type: 'facebook' | 'website' | 'linkedin';
-  last_checked: string | null;
-  last_update_url: string | null;
-  last_update_date: string | null;
-  last_summary: string | null;
-  status: 'pending' | 'new_update' | 'no_updates' | 'error';
-}
-
+// Types for API responses
 export interface DashboardItem {
   competitor_id: number;
   competitor_name: string;
@@ -34,162 +29,121 @@ export interface DashboardItem {
   status: string;
 }
 
-export interface User {
-  id: number;
-  email: string;
-  password_hash: string;
-  created_at: string;
-}
-
-// Initialize tables (run once on first deployment)
-export async function initializeTables() {
-  await sql`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS competitors (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('competitor', 'partner', 'inspiration')),
-      created_at TIMESTAMP DEFAULT NOW()
-    )
-  `;
-
-  await sql`
-    CREATE TABLE IF NOT EXISTS competitor_urls (
-      id SERIAL PRIMARY KEY,
-      competitor_id INTEGER NOT NULL REFERENCES competitors(id) ON DELETE CASCADE,
-      url TEXT NOT NULL,
-      source_type TEXT NOT NULL CHECK (source_type IN ('facebook', 'website', 'linkedin')),
-      last_checked TIMESTAMP,
-      last_update_url TEXT,
-      last_update_date TIMESTAMP,
-      last_summary TEXT,
-      status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'new_update', 'no_updates', 'error'))
-    )
-  `;
-}
-
 // User operations
-export async function createUser(email: string, passwordHash: string): Promise<User | null> {
+export async function createUser(email: string, passwordHash: string) {
   try {
-    const result = await sql<User>`
-      INSERT INTO users (email, password_hash)
-      VALUES (${email}, ${passwordHash})
-      RETURNING id, email, password_hash, created_at
-    `;
-    return result.rows[0] || null;
+    return await prisma.user.create({
+      data: { email, passwordHash },
+    });
   } catch {
     return null;
   }
 }
 
-export async function getUserByEmail(email: string): Promise<User | null> {
-  const result = await sql<User>`
-    SELECT id, email, password_hash, created_at
-    FROM users
-    WHERE email = ${email}
-  `;
-  return result.rows[0] || null;
+export async function getUserByEmail(email: string) {
+  return prisma.user.findUnique({
+    where: { email },
+  });
 }
 
-export async function getUserById(id: number): Promise<User | null> {
-  const result = await sql<User>`
-    SELECT id, email, password_hash, created_at
-    FROM users
-    WHERE id = ${id}
-  `;
-  return result.rows[0] || null;
+export async function getUserById(id: number) {
+  return prisma.user.findUnique({
+    where: { id },
+  });
 }
 
 // Competitor operations
 export async function getCompetitorsWithUrls(userId: number): Promise<DashboardItem[]> {
-  const result = await sql<DashboardItem>`
-    SELECT
-      c.id as competitor_id,
-      c.name as competitor_name,
-      c.type as competitor_type,
-      u.id as url_id,
-      u.url,
-      u.source_type,
-      u.last_checked,
-      u.last_update_url,
-      u.last_update_date,
-      u.last_summary,
-      u.status
-    FROM competitors c
-    LEFT JOIN competitor_urls u ON c.id = u.competitor_id
-    WHERE c.user_id = ${userId}
-    ORDER BY c.name, u.source_type
-  `;
-  return result.rows;
+  const competitors = await prisma.competitor.findMany({
+    where: { userId },
+    include: { urls: true },
+    orderBy: { name: 'asc' },
+  });
+
+  const items: DashboardItem[] = [];
+
+  for (const competitor of competitors) {
+    if (competitor.urls.length === 0) {
+      // Include competitor even without URLs
+      items.push({
+        competitor_id: competitor.id,
+        competitor_name: competitor.name,
+        competitor_type: competitor.type,
+        url_id: 0,
+        url: '',
+        source_type: '',
+        last_checked: null,
+        last_update_url: null,
+        last_update_date: null,
+        last_summary: null,
+        status: '',
+      });
+    } else {
+      for (const url of competitor.urls) {
+        items.push({
+          competitor_id: competitor.id,
+          competitor_name: competitor.name,
+          competitor_type: competitor.type,
+          url_id: url.id,
+          url: url.url,
+          source_type: url.sourceType,
+          last_checked: url.lastChecked?.toISOString() || null,
+          last_update_url: url.lastUpdateUrl,
+          last_update_date: url.lastUpdateDate?.toISOString() || null,
+          last_summary: url.lastSummary,
+          status: url.status,
+        });
+      }
+    }
+  }
+
+  return items;
 }
 
 export async function createCompetitor(
   userId: number,
   name: string,
-  type: string
-): Promise<number | null> {
-  const result = await sql`
-    INSERT INTO competitors (user_id, name, type)
-    VALUES (${userId}, ${name}, ${type})
-    RETURNING id
-  `;
-  return result.rows[0]?.id || null;
+  type: 'competitor' | 'partner' | 'inspiration'
+) {
+  const competitor = await prisma.competitor.create({
+    data: { userId, name, type },
+  });
+  return competitor.id;
 }
 
-export async function deleteCompetitor(competitorId: number, userId: number): Promise<boolean> {
-  // First delete associated URLs
-  await sql`DELETE FROM competitor_urls WHERE competitor_id = ${competitorId}`;
-  // Then delete the competitor, ensuring it belongs to the user
-  const result = await sql`
-    DELETE FROM competitors
-    WHERE id = ${competitorId} AND user_id = ${userId}
-  `;
-  return result.rowCount !== null && result.rowCount > 0;
+export async function deleteCompetitor(competitorId: number, userId: number) {
+  const result = await prisma.competitor.deleteMany({
+    where: { id: competitorId, userId },
+  });
+  return result.count > 0;
 }
 
 // URL operations
 export async function createCompetitorUrl(
   competitorId: number,
   url: string,
-  sourceType: string
-): Promise<number | null> {
-  const result = await sql`
-    INSERT INTO competitor_urls (competitor_id, url, source_type)
-    VALUES (${competitorId}, ${url}, ${sourceType})
-    RETURNING id
-  `;
-  return result.rows[0]?.id || null;
+  sourceType: 'facebook' | 'website' | 'linkedin'
+) {
+  const competitorUrl = await prisma.competitorUrl.create({
+    data: { competitorId, url, sourceType },
+  });
+  return competitorUrl.id;
 }
 
-export async function getCompetitorUrls(userId: number, urlId?: number): Promise<CompetitorUrl[]> {
+export async function getCompetitorUrls(userId: number, urlId?: number) {
   if (urlId) {
-    // Get single URL, but verify it belongs to user's competitor
-    const result = await sql<CompetitorUrl>`
-      SELECT u.*
-      FROM competitor_urls u
-      JOIN competitors c ON u.competitor_id = c.id
-      WHERE u.id = ${urlId} AND c.user_id = ${userId}
-    `;
-    return result.rows;
-  } else {
-    // Get all URLs for user's competitors
-    const result = await sql<CompetitorUrl>`
-      SELECT u.*
-      FROM competitor_urls u
-      JOIN competitors c ON u.competitor_id = c.id
-      WHERE c.user_id = ${userId}
-    `;
-    return result.rows;
+    return prisma.competitorUrl.findMany({
+      where: {
+        id: urlId,
+        competitor: { userId },
+      },
+    });
   }
+  return prisma.competitorUrl.findMany({
+    where: {
+      competitor: { userId },
+    },
+  });
 }
 
 export async function updateCompetitorUrl(
@@ -198,27 +152,30 @@ export async function updateCompetitorUrl(
   contentUrl: string | null,
   hasNew: boolean,
   summary: string | null,
-  status: string
-): Promise<void> {
-  if (hasNew) {
-    await sql`
-      UPDATE competitor_urls
-      SET
-        last_checked = ${lastChecked},
-        last_update_url = COALESCE(${contentUrl}, last_update_url),
-        last_update_date = ${lastChecked},
-        last_summary = ${summary},
-        status = ${status}
-      WHERE id = ${urlId}
-    `;
-  } else {
-    await sql`
-      UPDATE competitor_urls
-      SET
-        last_checked = ${lastChecked},
-        last_update_url = COALESCE(${contentUrl}, last_update_url),
-        status = ${status}
-      WHERE id = ${urlId}
-    `;
+  status: 'pending' | 'new_update' | 'no_updates' | 'error'
+) {
+  const data: {
+    lastChecked: Date;
+    lastUpdateUrl?: string;
+    lastUpdateDate?: Date;
+    lastSummary?: string | null;
+    status: 'pending' | 'new_update' | 'no_updates' | 'error';
+  } = {
+    lastChecked: new Date(lastChecked),
+    status,
+  };
+
+  if (contentUrl) {
+    data.lastUpdateUrl = contentUrl;
   }
+
+  if (hasNew) {
+    data.lastUpdateDate = new Date(lastChecked);
+    data.lastSummary = summary;
+  }
+
+  await prisma.competitorUrl.update({
+    where: { id: urlId },
+    data,
+  });
 }

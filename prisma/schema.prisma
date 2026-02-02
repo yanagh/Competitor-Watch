@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  email        String       @unique
+  passwordHash String       @map("password_hash")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  competitors  Competitor[]
+
+  @@map("users")
+}
+
+model Competitor {
+  id        Int              @id @default(autoincrement())
+  userId    Int              @map("user_id")
+  name      String
+  type      CompetitorType
+  createdAt DateTime         @default(now()) @map("created_at")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  urls      CompetitorUrl[]
+
+  @@map("competitors")
+}
+
+model CompetitorUrl {
+  id             Int            @id @default(autoincrement())
+  competitorId   Int            @map("competitor_id")
+  url            String
+  sourceType     SourceType     @map("source_type")
+  lastChecked    DateTime?      @map("last_checked")
+  lastUpdateUrl  String?        @map("last_update_url")
+  lastUpdateDate DateTime?      @map("last_update_date")
+  lastSummary    String?        @map("last_summary")
+  status         UrlStatus      @default(pending)
+  competitor     Competitor     @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@map("competitor_urls")
+}
+
+enum CompetitorType {
+  competitor
+  partner
+  inspiration
+}
+
+enum SourceType {
+  facebook
+  website
+  linkedin
+}
+
+enum UrlStatus {
+  pending
+  new_update
+  no_updates
+  error
+}

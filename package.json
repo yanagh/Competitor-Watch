@@ -4,15 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@vercel/postgres": "^0.10.0",
+    "@prisma/client": "^7.3.0",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
     "next": "16.1.6",
+    "prisma": "^7.3.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
@@ -22,6 +24,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.2.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",

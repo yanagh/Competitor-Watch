@@ -20,9 +20,9 @@ export async function POST(request: NextRequest) {
 
     for (const urlRecord of urls) {
       const now = new Date().toISOString();
-      const result = await fetchUrl(urlRecord.url, urlRecord.last_update_url);
+      const result = await fetchUrl(urlRecord.url, urlRecord.lastUpdateUrl);
 
-      let status: string;
+      let status: 'pending' | 'new_update' | 'no_updates' | 'error';
       let summary: string | null = null;
 
       if (result.error) {
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       } else {
         status = 'no_updates';
         // Keep existing summary if no new content
-        summary = urlRecord.last_summary;
+        summary = urlRecord.lastSummary;
       }
 
       await updateCompetitorUrl(
