@@ -35,7 +35,7 @@ export default function LandingPage() {
       <header className="border-b border-zinc-200 bg-white">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-zinc-900">Customer Watch</h1>
+            <h1 className="text-xl font-semibold text-zinc-900">Competitor Watch</h1>
             <span className="px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">
               Demo
             </span>
@@ -109,7 +109,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-zinc-200 bg-white">
         <div className="max-w-5xl mx-auto px-4 py-6 flex items-center justify-between">
-          <p className="text-sm text-zinc-500">Customer Watch Demo</p>
+          <p className="text-sm text-zinc-500">Competitor Watch Demo</p>
           <a
             href="https://ycprojects.vercel.app/"
             target="_blank"

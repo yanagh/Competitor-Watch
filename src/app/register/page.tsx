@@ -54,7 +54,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col items-center justify-center p-4">
       <Link href="/" className="mb-8 flex items-center gap-2">
-        <span className="text-xl font-semibold text-zinc-900">Customer Watch</span>
+        <span className="text-xl font-semibold text-zinc-900">Competitor Watch</span>
         <span className="px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">Demo</span>
       </Link>
       <div className="bg-white rounded-xl border border-zinc-200 p-8 w-full max-w-sm">

@@ -140,7 +140,7 @@ export default function Dashboard() {
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/" className="text-xl font-semibold text-zinc-900 hover:text-zinc-700">
-              Customer Watch
+              Competitor Watch
             </Link>
             <span className="px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">
               Demo
@@ -239,7 +239,7 @@ export default function Dashboard() {
       {/* Footer */}
       <footer className="border-t border-zinc-200 bg-white mt-auto">
         <div className="max-w-5xl mx-auto px-4 py-6 flex items-center justify-between">
-          <p className="text-sm text-zinc-500">Customer Watch Demo</p>
+          <p className="text-sm text-zinc-500">Competitor Watch Demo</p>
           <a
             href="https://ycprojects.vercel.app/"
             target="_blank"
