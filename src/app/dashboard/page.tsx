@@ -241,12 +241,12 @@ export default function Dashboard() {
         <div className="max-w-5xl mx-auto px-4 py-6 flex items-center justify-between">
           <p className="text-sm text-zinc-500">Competitor Watch Demo</p>
           <a
-            href="https://ycprojects.vercel.app/"
+            href="https://www.yanaintech.com/"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sm text-zinc-500 hover:text-zinc-700 transition-colors"
           >
-            ycprojects.vercel.app
+            Built by yanaintech.com
           </a>
         </div>
       </footer>
